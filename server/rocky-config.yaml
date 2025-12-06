@@ -1,0 +1,10 @@
+hostname: Tokamak-4-rocky         # Rocky 的主机名
+git_user: git
+git_home: /home/git
+git_repos_dir: /home/git/repos
+
+share_dir: /srv/share
+share_user: wuyuhang               # 共享目录属主
+
+docs_dir: /srv/docs
+docs_http_port: 8000
