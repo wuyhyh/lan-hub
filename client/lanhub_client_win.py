@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 
 HOSTNAME = "tokamak-4-rocky.local"
-ALIASES = ["tokamak-4-rocky", "gitlab.local"]  # 你想额外用的别名
+ALIASES = ["tokamak-4-rocky"]  # 只保留短主机名
 
 def resolve_ip():
     print(f"解析 {HOSTNAME} ...")
@@ -20,7 +20,6 @@ def resolve_ip():
         print(e)
         sys.exit(1)
 
-    # 找第一个 IPv4 地址
     m = re.search(r"(\d+\.\d+\.\d+\.\d+)", out)
     if not m:
         print("未在 ping 输出中找到 IPv4 地址：")
@@ -40,19 +39,19 @@ def update_hosts(ip: str):
     print(f"更新 {hosts_path} ...")
 
     try:
-        text = hosts_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        lines = hosts_path.read_text(encoding="utf-8", errors="ignore").splitlines()
     except PermissionError:
         print("无法读取 hosts 文件，请以管理员身份运行本脚本。")
         sys.exit(1)
 
     new_lines = []
-    for line in text:
-        if any(name in line for name in [HOSTNAME] + ALIASES):
-            # 丢弃旧记录
+    # 任何包含 tokamak-4-rocky 或 tokamak-4-rocky.local 的行都删掉
+    for line in lines:
+        if "tokamak-4-rocky" in line:
             continue
         new_lines.append(line)
 
-    names = [HOSTNAME.rstrip(".local"), HOSTNAME] + ALIASES
+    names = ["tokamak-4-rocky", HOSTNAME]  # 短名 + FQDN
     new_lines.append(f"{ip} " + " ".join(names))
 
     try:
@@ -69,8 +68,6 @@ def main():
     print("完成。现在可以用这些域名访问：")
     print("  - tokamak-4-rocky.local")
     print("  - tokamak-4-rocky")
-    print("  - gitlab.local")
 
 if __name__ == "__main__":
     main()
-
