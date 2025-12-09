@@ -3,14 +3,12 @@
 `lan-hub` 是一套在局域网内快速搭建“个人开发中心”的脚本和配置文件集合，核心目标：
 
 - 以一台 Rocky Linux 机器作为中心节点（开发中心）；
-- 在任意局域网中，通过统一域名访问：`Tokamak-4-rocky.local`；
+- 在任意局域网中，通过统一域名访问：`tokamak-4-rocky.local`；
 - 为 Windows / macOS / Linux / WSL 提供一致的接入方式。
 
 中心节点提供的能力：
 
 - SSH 登录与 Git 仓库托管（裸仓库）
-- Samba 文件共享（跨 Windows / Linux / macOS）
-- HTTP 文档浏览服务（Notebook / Sphinx 等）
 
 ---
 
@@ -19,15 +17,13 @@
 ```text
 lan-hub/
   server/      # 在 Rocky 上一键部署开发中心
-    bootstrap_rocky.sh
-    rocky-config.yaml
-    docs-http.service
+    setup_lanhub_server.sh
   client/      # 各类客户端的接入脚本
-    setup_unix_client.sh
-    win_update_rocky_hosts.py
+    lanhub_client_unix.sh
+    lanhub_client_win.py
   docs/        # 详细文档
-    DEPLOY_ROCKY.md       # Rocky 开发中心部署手册
-    CLIENT_SETUP.md       # 客户端接入手册
+    deploy_rocky.md       # Rocky 开发中心部署手册
+    client_setup.md       # 客户端接入手册
 ```
 
 ---
