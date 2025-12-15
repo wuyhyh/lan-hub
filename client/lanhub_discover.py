@@ -3,13 +3,47 @@ import argparse
 import json
 import socket
 import sys
-from typing import Optional
+from typing import Optional, List, Tuple
 
 DEFAULT_PORT = 58000
 MAGIC = b"LANHUB_DISCOVER_V1"
 
 
-def discover(port: int, timeout: float, expect_hostname: Optional[str]) -> Optional[dict]:
+def guess_local_ipv4() -> Optional[str]:
+    """通过连接 8.8.8.8 反推本机出接口 IPv4"""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        s.close()
+
+
+def build_targets(port: int, debug: bool = False) -> List[Tuple[str, int]]:
+    """
+    构造一组要尝试的广播地址：
+    1) 255.255.255.255
+    2) <local_A.B.C>.255 （假设 /24 网段）
+    """
+    targets = [("255.255.255.255", port)]
+
+    local_ip = guess_local_ipv4()
+    if local_ip:
+        parts = local_ip.split(".")
+        if len(parts) == 4:
+            bcast = f"{parts[0]}.{parts[1]}.{parts[2]}.255"
+            if bcast not in [t[0] for t in targets]:
+                targets.append((bcast, port))
+
+    if debug:
+        print("[lanhub_discover] targets:", ", ".join(f"{ip}:{port}" for ip, port in targets))
+
+    return targets
+
+
+def discover(port: int, timeout: float, expect_hostname: Optional[str], debug: bool = False) -> Optional[dict]:
     """
     通过 UDP 广播发现 lan-hub 服务器，返回 JSON dict：
     {"ip": "...", "hostname": "...", "fqdn": "...", "version": "..."}
@@ -19,35 +53,48 @@ def discover(port: int, timeout: float, expect_hostname: Optional[str]) -> Optio
     s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     s.settimeout(timeout)
 
-    try:
-        s.sendto(MAGIC, ("255.255.255.255", port))
-    except OSError as e:
-        print(f"[lanhub_discover] broadcast failed: {e}", file=sys.stderr)
-        return None
+    targets = build_targets(port, debug=debug)
+
+    # 给每个目标都发一次
+    for addr in targets:
+        try:
+            if debug:
+                print(f"[lanhub_discover] sendto {addr}")
+            s.sendto(MAGIC, addr)
+        except OSError as e:
+            if debug:
+                print(f"[lanhub_discover] sendto {addr} failed: {e}", file=sys.stderr)
 
     while True:
         try:
             data, addr = s.recvfrom(2048)
         except socket.timeout:
+            if debug:
+                print("[lanhub_discover] timeout waiting for response")
             return None
         except OSError as e:
-            print(f"[lanhub_discover] recv error: {e}", file=sys.stderr)
+            if debug:
+                print(f"[lanhub_discover] recv error: {e}", file=sys.stderr)
             return None
+
+        if debug:
+            print(f"[lanhub_discover] got {len(data)} bytes from {addr}")
 
         try:
             info = json.loads(data.decode("utf-8"))
         except Exception:
-            # 非 JSON 报文，丢弃
+            if debug:
+                print("[lanhub_discover] invalid JSON, ignore")
             continue
 
         if not isinstance(info, dict):
             continue
 
-        # 可选：按 hostname 过滤，只接受 tokamak-4-rocky
         if expect_hostname and info.get("hostname") != expect_hostname:
+            if debug:
+                print(f"[lanhub_discover] hostname mismatch {info.get('hostname')}, ignore")
             continue
 
-        # 附带真实来源 IP，便于调试
         info["from"] = addr[0]
         return info
 
@@ -62,11 +109,15 @@ def main():
         action="store_true",
         help="只输出 IP，不输出 JSON，给 shell/脚本调用用",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="打印调试信息（发送目标、收到的报文等）",
+    )
     args = parser.parse_args()
 
-    info = discover(args.port, args.timeout, args.hostname)
+    info = discover(args.port, args.timeout, args.hostname, debug=args.debug)
     if not info:
-        # 给脚本用：空输出 + 非 0 退出码
         if args.ip_only:
             sys.exit(1)
         print("lanhub_discover: no response", file=sys.stderr)
